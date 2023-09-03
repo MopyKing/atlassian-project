@@ -1,0 +1,108 @@
+version: '3.3'
+services:
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: as-jenkins
+    privileged: true
+    user: root
+    ports:
+    - 8080:8080
+    - 50000:50000
+    volumes:
+    - /home/shido/projects/atlassian-assignment/jenkins_configuration:/var/jenkins_home
+    - /var/run/docker.sock:/var/run/docker.sock
+
+  jira:
+    depends_on:
+    - jira-postgresql
+    image: teamatldocker/jira
+    container_name: as-jira
+    networks:
+    - jiranet
+    volumes:
+    - /home/shido/projects/atlassian-assignment/jira_configuration:/var/atlassian/jira:rw
+    - /home/shido/projects/atlassian-assignment/jira_logs:/var/atlassian/jira/log:rw
+    #- /home/shido/projects/atlassian-assignment/jira_shared_home:/var/atlassian/application-data/jira/shared:rw
+    ports:
+    - '8081:8080'
+    environment:
+    #- 'JIRA_DATABASE_URL=postgresql://jira@jira-postgresql/jiradb'
+    - 'ATL_JDBC_URL=jdbc:postgresql://jira-postgresql:5432/jiradb'
+    - 'ATL_JDBC_USER=jira'
+    - 'JIRA_DB_PASSWORD=jira123'
+    - 'SETENV_JVM_MINIMUM_MEMORY=2048m'
+    - 'SETENV_JVM_MAXIMUM_MEMORY=4096m'
+    - 'ATL_DB_TYPE=postgres72'
+    logging:
+      # limit logs retained on host to 25MB
+      driver: "json-file"
+      options:
+        max-size: "500k"
+        max-file: "50"
+
+  confluence:
+    depends_on:
+      - confluence-postgresql
+    image: atlassian/confluence-server:latest
+    container_name: as-confluence 
+    networks:
+      - jiranet
+    volumes:
+      - /home/shido/projects/atlassian-assignment/confluence_configuration:/var/atlassian/confluence
+    ports:
+      - '8082:8090'
+    environment:
+      - 'CONFLUENCE_HOME=/var/atlassian/confluence'
+      - 'ATL_DB_URL=jdbc:postgresql://confluence-postgresql:5433/confluencedb'
+      - 'ATL_DB_USER=confluence'
+      - 'ATL_DB_PASSWORD=confluence123'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "500k"
+        max-file: "50"
+
+  jira-postgresql:
+    image: postgres:9.5-alpine
+    container_name: as-jira-postgresql
+    volumes:
+      - /home/shido/projects/atlassian-assignment/jira_postgresql_configuration:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+    environment:
+      - 'POSTGRES_USER=jira'
+      - 'POSTGRES_PASSWORD=jira123'
+      - 'POSTGRES_DB=jiradb'
+      - 'POSTGRES_ENCODING=UNICODE'
+      - 'POSTGRES_COLLATE=C'
+      - 'POSTGRES_COLLATE_TYPE=C'
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "localhost", "-U", "jira", "-d", "jiradb"]
+      interval: 1s
+      timeout: 1s
+      retries: 60
+
+  confluence-postgresql:
+    image: postgres:9.5-alpine
+    container_name: as-confluence-postgresql
+    volumes:
+      - /home/shido/projects/atlassian-assignment/confluence_postgresql_configuration:/var/lib/postgresql/data
+    ports:
+      - '5433:5432'
+    environment:
+      - 'POSTGRES_USER=confluence'
+      - 'POSTGRES_PASSWORD=confluence123'
+      - 'POSTGRES_DB=confluencedb'
+      - 'POSTGRES_ENCODING=UNICODE'
+      - 'POSTGRES_COLLATE=C'
+      - 'POSTGRES_COLLATE_TYPE=C'
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "localhost", "-U", "confluence", "-d", "confluencedb"]
+      interval: 1s
+      timeout: 1s
+      retries: 60
+
+
+networks:
+  jiranet:
+    driver: bridge
